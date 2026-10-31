@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPL Manager Pro - Mac Edition (JSONBin.io)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; background-color: #0f172a; color: #f8fafc; }
+    .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .tank-meter { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+  </style>
+</head>
+<body class="min-h-screen p-6 flex flex-col justify-between">
+
+  <!-- HEADER MAC & JSONBIN CONFIG -->
+  <header class="glass-panel rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+        <i class="fa-solid fa-desktop text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          GPL Gestione Mac <span class="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-mono">JSONBIN CLOUD</span>
+        </h1>
+        <p class="text-xs text-slate-400">Postazione ufficio sincronizzata</p>
+      </div>
+    </div>
+
+    <!-- Parametri JSONBin.io & Reset Dati Globale -->
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl">
+        <span class="w-2.5 h-2.5 rounded-full bg-slate-500" id="syncDot"></span>
+        <span class="font-mono text-slate-300" id="syncStatus">Non collegato</span>
+      </div>
+      <input type="text" id="binIdInput" placeholder="Bin ID (es. 660f...)" class="bg-slate-900 text-cyan-300 px-2.5 py-1.5 rounded-xl border border-slate-700 font-mono w-40 focus:outline-none focus:border-cyan-500">
+      <input type="password" id="apiKeyInput" placeholder="Master Key ($2a$10...)" class="bg-slate-900 text-cyan-300 px-2.5 py-1.5 rounded-xl border border-slate-700 font-mono w-40 focus:outline-none focus:border-cyan-500">
+      <button onclick="saveAndTestJsonBin()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 rounded-xl font-medium transition flex items-center gap-1.5 shadow">
+        <i class="fa-solid fa-cloud-arrow-down"></i> Connetti
+      </button>
+      <button onclick="confirmResetAllData()" class="bg-rose-900/60 hover:bg-rose-800 text-rose-300 border border-rose-700/50 px-3 py-1.5 rounded-xl font-medium transition flex items-center gap-1.5" title="Elimina tutti gli ordini registrati sia in locale che sul cloud">
+        <i class="fa-solid fa-trash-can"></i> Reset Totale
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENUTO PRINCIPALE A 2 COLONNE -->
+  <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+    
+    <!-- COLONNA SINISTRA: DETTATURA E INSERIMENTO (5 COLONNE) -->
+    <div class="lg:col-span-5 flex flex-col gap-6">
+      
+      <!-- Box Microfono -->
+      <div class="glass-panel rounded-2xl p-5 border border-cyan-500/30 shadow-lg">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-microphone-lines text-cyan-400"></i>
+            <h2 class="text-sm font-semibold tracking-wide uppercase text-slate-200">Dettatura Vocale Ordine</h2>
+          </div>
+          <span class="text-[10px] text-cyan-400/80 bg-cyan-950/60 border border-cyan-800 px-2 py-0.5 rounded">Scorciatoia: ⌘ + K</span>
+        </div>
+
+        <div class="flex gap-2 mb-3">
+          <button id="btnVoiceMac" onclick="toggleVoiceRecording()" class="flex-1 py-3 px-4 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-950">
+            <i class="fa-solid fa-microphone text-base" id="micIcon"></i>
+            <span id="micText">Avvia Dettatura</span>
+          </button>
+          <button onclick="demoFill()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-mono border border-slate-700" title="Simula voce">
+            Test
+          </button>
+        </div>
+
+        <div id="voiceTranscriptBox" class="text-xs font-mono bg-slate-900/90 text-slate-300 p-2.5 rounded-lg border border-slate-800 h-14 overflow-y-auto italic">
+          In attesa di comando vocale...
+        </div>
+      </div>
+
+      <!-- Scheda Ordine Form -->
+      <div class="glass-panel rounded-2xl p-5 shadow-lg flex-grow flex flex-col justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-200 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice text-blue-400"></i> Scheda Ordine
+        </h2>
+
+        <form id="orderFormMac" onsubmit="handleFormSubmit(event)" class="space-y-4 text-sm">
+          <input type="hidden" id="orderId">
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Nominativo Cliente / Ditta *</label>
+            <input type="text" id="custName" required placeholder="Es. Mario Rossi" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Recapito Telefonico *</label>
+            <input type="tel" id="custPhone" required placeholder="Es. 338 1234567" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500 font-mono">
+          </div>
+
+          <!-- Misuratore Serbatoio ad Inserimento Libero -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-medium text-slate-400">Percentuale Serbatoio Attuale</label>
+              <div class="flex items-center gap-1">
+                <input type="number" id="tankLevelNumber" min="0" max="100" value="20" oninput="updateTankFromNumber(this.value)" class="w-16 bg-slate-900 text-cyan-400 font-bold font-mono text-xs text-right border border-slate-700 rounded-lg px-2 py-0.5 focus:outline-none focus:border-cyan-500">
+                <span class="text-xs text-cyan-400 font-bold font-mono">%</span>
+              </div>
+            </div>
+            <input type="range" id="tankLevelSlider" min="0" max="100" value="20" oninput="updateTankFromSlider(this.value)" class="w-full accent-cyan-500 bg-slate-800 h-2 rounded-lg cursor-pointer">
+            <div class="w-full bg-slate-900 rounded-full h-3 mt-2 overflow-hidden border border-slate-700 p-0.5">
+              <div id="tankVisualBar" class="tank-meter h-full rounded-full bg-cyan-500" style="width: 20%;"></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Quantità (Litri) *</label>
+              <input type="number" id="liters" required min="1" step="10" placeholder="1000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Trattativa (€/L)</label>
+              <input type="number" id="price" step="0.001" placeholder="Es. 0.820" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Note di Consegna</label>
+            <textarea id="notes" rows="2" placeholder="Indicazioni o accordi specifici..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500 text-xs"></textarea>
+          </div>
+
+          <div class="pt-2 flex gap-3">
+            <button type="submit" id="saveBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Salva su Cloud (⌘+Enter)
+            </button>
+            <button type="button" onclick="resetForm()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition text-xs font-medium">
+              Svuota Campi
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- COLONNA DESTRA: RIEPILOGO & TABELLA ORDINI (7 COLONNE) -->
+    <div class="lg:col-span-7 flex flex-col gap-6">
+      
+      <!-- KPI & Filtro Data -->
+      <div class="glass-panel rounded-2xl p-5 shadow-lg border border-slate-700">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-200">Riepilogo Giornaliero</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="fetchJsonBinOrders()" class="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-lg text-xs" title="Aggiorna ora dal cloud">
+              <i class="fa-solid fa-arrows-rotate" id="refreshIcon"></i>
+            </button>
+            <input type="date" id="filterDate" onchange="renderOrders()" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500">
+            <button onclick="exportDailyPDF()" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow">
+              <i class="fa-solid fa-file-pdf"></i> Esporta Report PDF
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+            <p class="text-[11px] text-slate-400 uppercase font-semibold">Ordini Totali</p>
+            <p id="kpiCount" class="text-xl font-bold text-white mt-1">0</p>
+          </div>
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+            <p class="text-[11px] text-slate-400 uppercase font-semibold">Volume Litri</p>
+            <p id="kpiLiters" class="text-xl font-bold text-cyan-400 font-mono mt-1">0 L</p>
+          </div>
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+            <p class="text-[11px] text-slate-400 uppercase font-semibold">Totale Stimato</p>
+            <p id="kpiTotalEuro" class="text-xl font-bold text-emerald-400 font-mono mt-1">€ 0.00</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabella Ordini -->
+      <div class="glass-panel rounded-2xl p-5 shadow-lg flex-grow flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-blue-400"></i>
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-200">Ordini Sincronizzati da JSONBin</h3>
+          </div>
+          <span id="lastUpdatedLabel" class="text-xs text-slate-400 font-mono">In attesa...</span>
+        </div>
+
+        <div class="overflow-x-auto flex-grow rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-900/90 text-slate-400 font-medium">
+              <tr>
+                <th class="p-3">Cliente</th>
+                <th class="p-3">Telefono</th>
+                <th class="p-3">Cisterna</th>
+                <th class="p-3">Litri</th>
+                <th class="p-3">Prezzo/L</th>
+                <th class="p-3">Note</th>
+                <th class="p-3 text-right">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody" class="divide-y divide-slate-800 text-slate-200">
+              <!-- Righe dinamiche -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="mt-4 text-center text-[11px] text-slate-500">
+    GPL Mac Office • Sincronizzazione Cloud con JSONBin.io v3
+  </footer>
+
+  <script>
+    const STORAGE_KEY = 'GPL_JSONBIN_ORDERS_CACHE';
+    const CFG_BIN_ID = 'GPL_JB_BIN_ID';
+    const CFG_API_KEY = 'GPL_JB_API_KEY';
+
+    document.getElementById('filterDate').valueAsDate = new Date();
+    document.getElementById('binIdInput').value = localStorage.getItem(CFG_BIN_ID) || '';
+    document.getElementById('apiKeyInput').value = localStorage.getItem(CFG_API_KEY) || '';
+
+    function getLocalOrders() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function setLocalOrders(arr) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+      renderOrders();
+    }
+
+    // Gestione livello serbatoio libero e slider collegato
+    function updateTankFromSlider(val) {
+      val = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      document.getElementById('tankLevelNumber').value = val;
+      renderTankGraphic(val);
+    }
+
+    function updateTankFromNumber(val) {
+      val = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      document.getElementById('tankLevelSlider').value = val;
+      renderTankGraphic(val);
+    }
+
+    function renderTankGraphic(val) {
+      const bar = document.getElementById('tankVisualBar');
+      bar.style.width = val + '%';
+      if (val <= 15) bar.className = 'tank-meter h-full rounded-full bg-rose-500';
+      else if (val <= 30) bar.className = 'tank-meter h-full rounded-full bg-amber-500';
+      else bar.className = 'tank-meter h-full rounded-full bg-cyan-500';
+    }
+
+    function saveAndTestJsonBin() {
+      const bId = document.getElementById('binIdInput').value.trim();
+      const aKey = document.getElementById('apiKeyInput').value.trim();
+
+      if (!bId || !aKey) {
+        alert("Inserisci sia il Bin ID che la Master Key di JSONBin.io");
+        return;
+      }
+
+      localStorage.setItem(CFG_BIN_ID, bId);
+      localStorage.setItem(CFG_API_KEY, aKey);
+      fetchJsonBinOrders();
+    }
+
+    // Lettura dal Cloud (GET)
+    async function fetchJsonBinOrders() {
+      const bId = localStorage.getItem(CFG_BIN_ID);
+      const aKey = localStorage.getItem(CFG_API_KEY);
+
+      if (!bId || !aKey) {
+        document.getElementById('syncStatus').innerText = "Configura Bin ID & Key";
+        return;
+      }
+
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.classList.add('fa-spin');
+
+      try {
+        const resp = await fetch(`https://api.jsonbin.io/v3/b/${bId}/latest`, {
+          method: 'GET',
+          headers: { 'X-Master-Key': aKey }
+        });
+
+        if (!resp.ok) throw new Error("Errore HTTP: " + resp.status);
+        const data = await resp.json();
+        
+        let orders = Array.isArray(data.record) ? data.record : [];
+        setLocalOrders(orders);
+        updateSyncStatus(true, "Cloud Sincronizzato");
+      } catch (err) {
+        console.error(err);
+        updateSyncStatus(false, "Errore connessione Bin");
+      } finally {
+        if (icon) icon.classList.remove('fa-spin');
+      }
+    }
+
+    // Scrittura sul Cloud (PUT)
+    async function pushJsonBinOrders(orders) {
+      const bId = localStorage.getItem(CFG_BIN_ID);
+      const aKey = localStorage.getItem(CFG_API_KEY);
+
+      setLocalOrders(orders);
+
+      if (!bId || !aKey) {
+        alert("Ordine memorizzato localmente. Configura JSONBin per la sincronizzazione.");
+        return;
+      }
+
+      updateSyncStatus(true, "Invio al cloud in corso...");
+
+      try {
+        const resp = await fetch(`https://api.jsonbin.io/v3/b/${bId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': aKey
+          },
+          body: JSON.stringify(orders)
+        });
+
+        if (!resp.ok) throw new Error("Errore: " + resp.status);
+        updateSyncStatus(true, "Cloud Sincronizzato");
+      } catch (err) {
+        console.error(err);
+        updateSyncStatus(false, "Errore salvataggio Cloud");
+        alert("Errore salvataggio su JSONBin.io: controlla credenziali.");
+      }
+    }
+
+    // Reset Totale Dati
+    async function confirmResetAllData() {
+      const conferma = confirm("ATTENZIONE: Stai per eliminare TUTTI gli ordini sia dalla memoria locale che dal server Cloud JSONBin. Questa azione è irreversibile. Continuare?");
+      if (!conferma) return;
+
+      const secondaConferma = prompt("Digita 'RESET' in maiuscolo per confermare la cancellazione completa:");
+      if (secondaConferma !== "RESET") {
+        alert("Operazione annullata.");
+        return;
+      }
+
+      await pushJsonBinOrders([]);
+      resetForm();
+      alert("Tutti gli ordini sono stati azzerati con successo!");
+    }
+
+    function updateSyncStatus(ok, text) {
+      const dot = document.getElementById('syncDot');
+      const label = document.getElementById('syncStatus');
+      label.innerText = text;
+      if (ok) {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+        document.getElementById('lastUpdatedLabel').innerText = "Aggiornato: " + new Date().toLocaleTimeString();
+      } else {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+      }
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('orderId').value || 'ORD-' + Date.now().toString(36).toUpperCase();
+      const tankVal = parseInt(document.getElementById('tankLevelNumber').value, 10) || 0;
+
+      const newOrder = {
+        id: id,
+        date: document.getElementById('filterDate').value || new Date().toISOString().split('T')[0],
+        time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+        custName: document.getElementById('custName').value.trim(),
+        custPhone: document.getElementById('custPhone').value.trim(),
+        tankLevel: tankVal,
+        liters: parseInt(document.getElementById('liters').value, 10),
+        price: document.getElementById('price').value ? parseFloat(document.getElementById('price').value) : null,
+        notes: document.getElementById('notes').value.trim()
+      };
+
+      let list = getLocalOrders();
+      const idx = list.findIndex(o => o.id === id);
+      if (idx >= 0) list[idx] = newOrder;
+      else list.unshift(newOrder);
+
+      await pushJsonBinOrders(list);
+      resetForm();
+    }
+
+    async function deleteOrder(id) {
+      if (confirm("Eliminare quest'ordine dal Cloud?")) {
+        let list = getLocalOrders().filter(o => o.id !== id);
+        await pushJsonBinOrders(list);
+      }
+    }
+
+    function resetForm() {
+      document.getElementById('orderId').value = '';
+      document.getElementById('custName').value = '';
+      document.getElementById('custPhone').value = '';
+      document.getElementById('liters').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('notes').value = '';
+      updateTankFromNumber(20);
+    }
+
+    function renderOrders() {
+      const selectedDate = document.getElementById('filterDate').value;
+      const allOrders = getLocalOrders();
+      const filtered = allOrders.filter(o => !selectedDate || o.date === selectedDate);
+
+      const tbody = document.getElementById('ordersTableBody');
+      tbody.innerHTML = '';
+
+      let totalLiters = 0;
+      let totalEuro = 0;
+
+      filtered.forEach(o => {
+        totalLiters += o.liters || 0;
+        if (o.liters && o.price) totalEuro += (o.liters * o.price);
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="p-3 font-medium text-white">${o.custName}</td>
+          <td class="p-3 font-mono text-slate-400">${o.custPhone}</td>
+          <td class="p-3">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${o.tankLevel <= 15 ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-slate-800 text-cyan-300'}">
+              ${o.tankLevel}%
+            </span>
+          </td>
+          <td class="p-3 font-bold font-mono text-cyan-300">${o.liters} L</td>
+          <td class="p-3 font-mono">${o.price ? '€ ' + o.price.toFixed(3) : '-'}</td>
+          <td class="p-3 text-slate-400 truncate max-w-[150px]">${o.notes || '-'}</td>
+          <td class="p-3 text-right">
+            <button onclick="deleteOrder('${o.id}')" class="text-rose-400 hover:text-rose-300 p-1">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('kpiCount').innerText = filtered.length;
+      document.getElementById('kpiLiters').innerText = totalLiters.toLocaleString('it-IT') + ' L';
+      document.getElementById('kpiTotalEuro').innerText = '€ ' + totalEuro.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function exportDailyPDF() {
+      const date = document.getElementById('filterDate').value;
+      const orders = getLocalOrders().filter(o => o.date === date);
+
+      if (orders.length === 0) {
+        alert('Nessun ordine presente nella data selezionata.');
+        return;
+      }
+
+      const container = document.createElement('div');
+      container.style.padding = '20px';
+      container.style.color = '#000';
+      container.style.fontFamily = 'Arial, sans-serif';
+
+      let rowsHtml = orders.map((o, i) => `
+        <tr style="border-bottom: 1px solid #ccc; font-size: 11px;">
+          <td style="padding: 6px;">${i+1}</td>
+          <td style="padding: 6px; font-weight: bold;">${o.custName}</td>
+          <td style="padding: 6px;">${o.custPhone}</td>
+          <td style="padding: 6px;">${o.tankLevel}%</td>
+          <td style="padding: 6px; font-weight: bold;">${o.liters} L</td>
+          <td style="padding: 6px;">${o.price ? '€ ' + o.price.toFixed(3) : '-'}</td>
+          <td style="padding: 6px;">${o.notes || ''}</td>
+        </tr>
+      `).join('');
+
+      container.innerHTML = `
+        <div style="text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 8px; margin-bottom: 15px;">
+          <h2 style="margin: 0; color: #0284c7;">RIEPILOGO CONSEGNE GPL</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; color: #555;">Data: <strong>${date}</strong> | Mac Ufficio</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 20px;">
+          <thead>
+            <tr style="background: #f1f5f9; font-size: 11px; border-bottom: 2px solid #334155;">
+              <th style="padding: 6px;">#</th>
+              <th style="padding: 6px;">Cliente</th>
+              <th style="padding: 6px;">Telefono</th>
+              <th style="padding: 6px;">Cisterna</th>
+              <th style="padding: 6px;">Litri</th>
+              <th style="padding: 6px;">Prezzo</th>
+              <th style="padding: 6px;">Note</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div style="font-size: 11px; margin-top: 30px; display: flex; justify-content: space-between;">
+          <div>Firma Responsabile: _______________________</div>
+          <div>Firma Conducente: _______________________</div>
+        </div>
+      `;
+
+      html2pdf().set({
+        margin: 10,
+        filename: `Riepilogo_GPL_${date}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      }).from(container).save();
+    }
+
+    // Gestione Voce
+    let recognition = null;
+    let isRecording = false;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new Speech();
+      recognition.lang = 'it-IT';
+      recognition.onstart = () => {
+        isRecording = true;
+        document.getElementById('micText').innerText = "In ascolto...";
+        document.getElementById('micIcon').className = "fa-solid fa-circle-notch fa-spin text-rose-400";
+      };
+      recognition.onresult = (evt) => {
+        const text = evt.results[0][0].transcript;
+        document.getElementById('voiceTranscriptBox').innerText = `"${text}"`;
+        parseVoiceText(text);
+      };
+      recognition.onerror = () => stopRecording();
+      recognition.onend = () => stopRecording();
+    }
+
+    function toggleVoiceRecording() {
+      if (!recognition) {
+        alert("Riconoscimento vocale non supportato.");
+        return;
+      }
+      if (isRecording) recognition.stop();
+      else recognition.start();
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      document.getElementById('micText').innerText = "Avvia Dettatura";
+      document.getElementById('micIcon').className = "fa-solid fa-microphone";
+    }
+
+    function parseVoiceText(str) {
+      const text = str.toLowerCase();
+      const phoneMatch = text.match(/(?:telefono|cellulare|numero)?\s*([0-9\s]{8,13})/i);
+      if (phoneMatch) {
+        const clean = phoneMatch[1].replace(/\s+/g, '');
+        if (clean.length >= 8) document.getElementById('custPhone').value = clean;
+      }
+      const tankMatch = text.match(/(\d{1,3})\s*(?:%|percento)/i) || text.match(/(?:serbatoio al|livello al)\s*(\d{1,3})/i);
+      if (tankMatch) {
+        const val = Math.min(parseInt(tankMatch[1], 10), 100);
+        updateTankFromNumber(val);
+      }
+      const literMatch = text.match(/(\d{2,5})\s*(?:litri|l\b)/i) || text.match(/(?:quantità|metti)\s*(\d{2,5})/i);
+      if (literMatch) document.getElementById('liters').value = literMatch[1];
+
+      const priceMatch = text.match(/(?:prezzo|euro)?\s*(\d+[,\.]\d{1,3})\s*(?:euro|al litro)?/i);
+      if (priceMatch) document.getElementById('price').value = priceMatch[1].replace(',', '.');
+
+      const nameMatch = text.match(/(?:ordine per|cliente|signor|sig\.?|ditta)\s+([a-zA-Zàèéìòù\s]+?)(?=\s+(?:telefono|serbatoio|con|litri|prezzo|note|$))/i);
+      if (nameMatch) {
+        const n = nameMatch[1].trim();
+        document.getElementById('custName').value = n.charAt(0).toUpperCase() + n.slice(1);
+      }
+    }
+
+    function demoFill() {
+      const demo = "Nuovo ordine per Azienda Rossi telefono 3358899112 serbatoio al 25 percento servono 1200 litri prezzo 0.815 euro note scarico nel retro";
+      document.getElementById('voiceTranscriptBox').innerText = `"${demo}"`;
+      parseVoiceText(demo);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('orderFormMac').requestSubmit();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        toggleVoiceRecording();
+      }
+    });
+
+    setInterval(() => {
+      if (localStorage.getItem(CFG_BIN_ID) && localStorage.getItem(CFG_API_KEY)) {
+        fetchJsonBinOrders();
+      }
+    }, 20000);
+
+    renderOrders();
+    updateTankFromNumber(20);
+    if (localStorage.getItem(CFG_BIN_ID) && localStorage.getItem(CFG_API_KEY)) {
+      fetchJsonBinOrders();
+    }
+  </script>
+</body>
+</html>
